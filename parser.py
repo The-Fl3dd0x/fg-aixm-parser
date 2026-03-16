@@ -1,4 +1,4 @@
-import xml.etree.cElementTree as ET
+from lxml import etree
 from dataclasses import dataclass
 from typing import List
 
@@ -26,34 +26,30 @@ class Approach:
 g_Sids: List[SID] = list()
 g_Stars: List[STAR] = list()
 g_Apprs: List[Approach] = list()
+g_nsmap = {
+    "aixm": "http://www.aixm.aero/schema/5.1.1",
+    "message": "http://www.aixm.aero/schema/5.1.1/message"
+}
 
 def parse(aixmFile):
-    tree = ET.parse(aixmFile)
+    tree = etree.parse(aixmFile)
     root = tree.getroot()
-    for messageMember in root:
-        if not messageMember.tag == "{http://www.aixm.aero/schema/5.1.1/message}hasMember":
-            continue
-        for feature in messageMember:
-            if feature.tag == "{http://www.aixm.aero/schema/5.1.1}StandardInstrumentArrival":
-                parseStar(feature)
-            elif feature.tag == "{http://www.aixm.aero/schema/5.1.1}StandardInstrumentDeparture":
-                parseSid(feature)
-            elif feature.tag == "{http://www.aixm.aero/schema/5.1.1}InstrumentApproachProcedure":
-                parseAppr(feature)
+    for star in root.xpath("//message:hasMember/aixm:StandardInstrumentArrival", namespaces=g_nsmap):
+        parseStar(star)
 
-def parseStar(feature: ET.Element):
-    starTs = feature.find("{http://www.aixm.aero/schema/5.1.1}timeSlice/{http://www.aixm.aero/schema/5.1.1}StandardInstrumentArrivalTimeSlice")
+def parseStar(star: etree.Element):
+    starTs = star.xpath("aixm:timeSlice/aixm:StandardInstrumentArrivalTimeSlice", namespaces=g_nsmap)[0]
     if starTs == None:
         return
-    name = starTs.findtext("{http://www.aixm.aero/schema/5.1.1}designator", "")
-    runways = starTs.findall("{http://www.aixm.aero/schema/5.1.1}arrival/{http://www.aixm.aero/schema/5.1.1}LandingTakeoffAreaCollection/{http://www.aixm.aero/schema/5.1.1}runway")
+    name = starTs.findtext("aixm:designator", "", g_nsmap)
+    runways = starTs.findall("aixm:arrival/aixm:LandingTakeoffAreaCollection/aixm:runway", g_nsmap)
     runwaysTxt = ""
     for rw in runways:
         rwtxt = rw.get("{http://www.w3.org/1999/xlink}title")
         if rwtxt == None:
             rwtxt = ""
         runwaysTxt += rwtxt + ' '
-    airport = starTs.find("{http://www.aixm.aero/schema/5.1.1}airportHeliport")
+    airport = starTs.find("aixm:airportHeliport", g_nsmap)
     if airport == None:
         print("airport is None!")
         return
@@ -61,13 +57,13 @@ def parseStar(feature: ET.Element):
 
     g_Stars.append(STAR(name, airporttxt, runwaysTxt, [], []))
 
-def parseSid(feature: ET.Element):
+def parseSid(feature: etree.Element):
     return
 
-def parseAppr(feature: ET.Element):
+def parseAppr(feature: etree.Element):
     return
 
 if __name__ == "__main__":
-    parse("ED_Procedure.xml")
+    parse("../ED_Procedure.xml")
     for star in g_Stars:
         print(star.name, " ", star.airport, " ", star.runways)
